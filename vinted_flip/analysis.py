@@ -33,8 +33,23 @@ BUYER_PROTECTION_FLAT = 0.70
 DEFAULT_SHIPPING_IN = 2.50
 DEFAULT_CLEANING_COST = 2.00
 
-# Kids'/baby sizes aren't comparable with an adult-priced market group.
-KIDS_SIZE_RE = re.compile(r"\b(months?|years?|\d+\s*cm)\b", re.IGNORECASE)
+# Kids'/baby items aren't comparable with an adult-priced market group. The
+# size field catches "9-12 months / 74 cm"; the title catches "boys XL puffer"
+# where the size field alone looks adult.
+KIDS_SIZE_RE = re.compile(
+    r"\b(months?|years?|\d+\s*cm|child|kids)\b", re.IGNORECASE
+)
+KIDS_TITLE_RE = re.compile(
+    r"\b(kids?|boys?|girls?|junior|youth|toddler|baby|infant)\b", re.IGNORECASE
+)
+
+# Likely fakes or admitted lookalikes — never worth the reputation risk.
+FAKE_RE = re.compile(
+    r"\b(rip[\s-]?off|replica|fake|copy|inspired|style of|dupe|"
+    r"not\s+(?:sure\s+if\s+)?(?:it['’]?s\s+)?authentic|unverified|"
+    r"not\s+verified)\b",
+    re.IGNORECASE,
+)
 
 # A cheap listing whose title admits damage is discounted for a reason a
 # reshoot won't fix. (Stains are deliberately absent: cleaning is the play.)
@@ -46,11 +61,31 @@ DAMAGE_RE = re.compile(
 
 
 def is_kids_size(listing: Listing) -> bool:
-    return bool(KIDS_SIZE_RE.search(listing.size))
+    return bool(
+        KIDS_SIZE_RE.search(listing.size) or KIDS_TITLE_RE.search(listing.title)
+    )
 
 
 def looks_damaged(listing: Listing) -> bool:
     return bool(DAMAGE_RE.search(listing.title))
+
+
+def looks_fake(listing: Listing) -> bool:
+    return bool(FAKE_RE.search(listing.title))
+
+
+# Brand accessories ride along in brand searches at pocket-money prices —
+# laces, keyrings, pins — and aren't comparable with the garment market.
+ACCESSORY_RE = re.compile(
+    r"\b(laces?|shoelaces?|keyrings?|key\s?rings?|pins?|badges?|stickers?|"
+    r"patch(es)?|swing\s?tags?|dust\s?bags?|box\s+only|hangers?|"
+    r"buttons?|wax\s+tin|care\s+kit)\b",
+    re.IGNORECASE,
+)
+
+
+def is_accessory(listing: Listing) -> bool:
+    return bool(ACCESSORY_RE.search(listing.title))
 
 
 @dataclass
@@ -84,11 +119,16 @@ class GroupStats:
 
     def matches(self, listing: Listing) -> bool:
         """Is this listing genuinely comparable to the group? Cheapest-first
-        search results drift off-brand, which would wreck the price comparison."""
+        search results drift off-brand — and a mere title mention isn't enough
+        when the item carries a *different* brand tag (e.g. CHAPS "Ralph
+        Lauren" diffusion pieces aren't priced like mainline Ralph Lauren)."""
         if not self.dominant_brand:
             return True
         brand = self.dominant_brand.lower()
-        return listing.brand.lower() == brand or brand in listing.title.lower()
+        listing_brand = listing.brand.lower().strip()
+        if listing_brand and listing_brand not in ("not verified",):
+            return listing_brand == brand
+        return brand in listing.title.lower()
 
 
 @dataclass
@@ -123,7 +163,12 @@ def evaluate(
     if listing.price <= 0 or group.median_price <= 0:
         return None
 
-    if is_kids_size(listing) or looks_damaged(listing):
+    if (
+        is_kids_size(listing)
+        or looks_damaged(listing)
+        or looks_fake(listing)
+        or is_accessory(listing)
+    ):
         return None  # not comparable / discounted for a reason we can't fix
 
     ratio = listing.price / group.median_price

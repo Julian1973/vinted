@@ -52,6 +52,11 @@ def run(argv: list[str] | None = None) -> int:
                         help="Only keep candidates whose photo scores as poor.")
     parser.add_argument("--min-profit", type=float, default=5.0,
                         help="Minimum estimated profit in GBP (default 5).")
+    parser.add_argument(
+        "--conditions", nargs="+", default=None, metavar="CONDITION",
+        help='Only keep these condition labels, e.g. --conditions '
+             '"New with tags" "New without tags" "Very good".',
+    )
     parser.add_argument("--delay", type=float, default=2.0,
                         help="Seconds between requests (be polite; default 2).")
     parser.add_argument("--out", default="report",
@@ -94,9 +99,20 @@ def run(argv: list[str] | None = None) -> int:
         cheap.extend(l for l in listings if l.id not in seen
                      and l.price <= group.median_price * args.max_ratio)
 
+        allowed_conditions = (
+            {c.lower() for c in args.conditions} if args.conditions else None
+        )
+        # The search term's last word names the item type ("...jacket",
+        # "...samba"); a candidate whose title never mentions it is usually a
+        # different garment or an accessory priced in a different market.
+        item_word = term.split()[-1].lower()
         for listing in cheap:
             if not group.matches(listing):
                 continue  # off-brand result from the cheapest-first search
+            if item_word not in listing.title.lower():
+                continue  # different item type than the market we priced
+            if allowed_conditions and listing.status.lower() not in allowed_conditions:
+                continue
             photo = None
             if listing.photo_url:
                 data = client.fetch_photo(listing.photo_url)
