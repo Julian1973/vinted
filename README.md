@@ -21,9 +21,16 @@ For each search term you give it (e.g. `"carhartt jacket"`):
 4. **Estimates profit** — resale at 95% of group median, minus the buy price,
    buyer-protection fee (~5% + £0.70), inbound shipping, and a cleaning
    allowance. On Vinted UK selling is fee-free, so what's left is yours.
-5. **Ranks and reports** — a flip score blends margin, demand, and how fixable
-   the photo is; results land in `report.html` (browseable, with thumbnails)
-   and `report.csv`.
+5. **Deep-vets the top candidates** — opens each ad itself (not just the
+   search result): scans the full description for damage the discount is
+   really about (holes, broken zips, smells → **AVOID**) versus flaws the
+   play exists to fix (stains, bobbling → still in), checks the seller's
+   feedback score and history, counts photos, and issues a verdict —
+   **PROMISING / CHECK / AVOID** — with the reasons and a description
+   excerpt shown in the report. `--vet N` controls how many (default 10).
+6. **Ranks and reports** — PROMISING first, AVOID last; within a verdict, a
+   flip score blends margin, demand, and how fixable the photo is. Results
+   land in `report.html` (browseable, with thumbnails) and `report.csv`.
 
 ## Usage
 

@@ -57,6 +57,10 @@ def run(argv: list[str] | None = None) -> int:
         help='Only keep these condition labels, e.g. --conditions '
              '"New with tags" "New without tags" "Very good".',
     )
+    parser.add_argument("--vet", type=int, default=10, metavar="N",
+                        help="Deep-vet the top N candidates by opening their "
+                             "ads: description damage scan, all photos, "
+                             "seller history (default 10; 0 disables).")
     parser.add_argument("--delay", type=float, default=2.0,
                         help="Seconds between requests (be polite; default 2).")
     parser.add_argument("--out", default="report",
@@ -135,6 +139,24 @@ def run(argv: list[str] | None = None) -> int:
             candidates.append(cand)
 
     candidates.sort(key=lambda c: c.flip_score, reverse=True)
+
+    if args.vet > 0 and candidates:
+        from .vet import vet_listing
+
+        to_vet = candidates[: args.vet]
+        log.info("Deep-vetting top %d candidates (reading full ads)...", len(to_vet))
+        for cand in to_vet:
+            cand.vet = vet_listing(client, cand.listing.url)
+            if cand.vet:
+                log.info("  %s — %s", cand.vet.verdict, cand.listing.title[:60])
+        # Damage-admitting ads sink to the bottom; PROMISING floats up.
+        rank = {"PROMISING": 0, "CHECK": 1, None: 2, "AVOID": 3}
+        candidates.sort(
+            key=lambda c: (
+                rank.get(c.vet.verdict if c.vet else None, 2),
+                -c.flip_score,
+            )
+        )
     out_html = Path(f"{args.out}.html")
     out_csv = Path(f"{args.out}.csv")
     write_html(candidates, out_html)

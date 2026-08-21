@@ -142,6 +142,7 @@ class FlipCandidate:
     estimated_profit: float
     flip_score: float
     reasons: list[str] = field(default_factory=list)
+    vet: object = None  # Optional[vet.VetReport], attached by the CLI
 
 
 def buy_in_cost(price: float, shipping: float = DEFAULT_SHIPPING_IN,
