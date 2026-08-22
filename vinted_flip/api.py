@@ -82,6 +82,20 @@ class VintedClient:
             }
         )
         self._bootstrapped = False
+        self._csrf_token: Optional[str] = None
+
+    def attach_cookies(self, cookie_header: str) -> None:
+        """Attach a logged-in browser session.
+
+        `cookie_header` is the raw Cookie header copied from the browser's
+        dev tools while logged in on vinted.co.uk ("name=value; name2=value2").
+        This ties requests to that account — keep volume low and human-paced.
+        """
+        for part in cookie_header.split(";"):
+            if "=" in part:
+                name, _, value = part.strip().partition("=")
+                self.session.cookies.set(name, value, domain=f".{self.domain.removeprefix('www.')}")
+        self._bootstrapped = True  # don't overwrite the real session
 
     def _bootstrap(self) -> None:
         """Hit the homepage once to receive the anonymous session cookies."""
@@ -90,6 +104,59 @@ class VintedClient:
         resp = self.session.get(self.base, timeout=30)
         resp.raise_for_status()
         self._bootstrapped = True
+
+    def _csrf(self) -> Optional[str]:
+        """The web app sends an X-CSRF-Token header on writes; it is embedded
+        in any page's <meta name="csrf-token"> tag."""
+        if self._csrf_token:
+            return self._csrf_token
+        import re
+
+        resp = self.session.get(self.base, timeout=30)
+        m = re.search(
+            r'<meta[^>]+name="csrf-token"[^>]+content="([^"]+)"', resp.text
+        ) or re.search(r'"CSRF_TOKEN"\s*:\s*"([^"]+)"', resp.text)
+        if m:
+            self._csrf_token = m.group(1)
+        return self._csrf_token
+
+    def whoami(self) -> Optional[str]:
+        """Login name of the attached account, or None when anonymous."""
+        self._throttle()
+        try:
+            resp = self.session.get(
+                f"{self.base}/api/v2/users/current", timeout=30
+            )
+            if resp.ok:
+                user = resp.json().get("user") or {}
+                return user.get("login")
+        except requests.RequestException:
+            pass
+        return None
+
+    def favourite(self, item_id: int) -> bool:
+        """Heart a listing so it shows in the account's Favourites tab.
+        Requires attach_cookies(). Returns True on success."""
+        self._throttle()
+        headers = {}
+        token = self._csrf()
+        if token:
+            headers["X-CSRF-Token"] = token
+        try:
+            resp = self.session.post(
+                f"{self.base}/api/v2/user_favourites/toggle",
+                json={"type": "item", "entity_id": item_id},
+                headers=headers,
+                timeout=30,
+            )
+            if not resp.ok:
+                log.warning(
+                    "Favourite failed for item %s: HTTP %s", item_id, resp.status_code
+                )
+            return resp.ok
+        except requests.RequestException as exc:
+            log.warning("Favourite failed for item %s: %s", item_id, exc)
+            return False
 
     def _throttle(self) -> None:
         elapsed = time.monotonic() - self._last_request

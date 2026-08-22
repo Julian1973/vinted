@@ -71,6 +71,34 @@ Key flags:
 | `--pages` | 2 | Pages of comparables sampled per search (96/page) |
 | `--delay` | 2.0s | Politeness delay between requests |
 
+## Linking your Vinted account (optional)
+
+With your account linked, the scanner **hearts its PROMISING finds** so they
+land in the Favourites tab of the Vinted app — one tap from the ad, one more
+from buying. Vinted has no official third-party login, so linking means
+lending the tool your browser session:
+
+1. Log in at vinted.co.uk in your browser.
+2. Open dev tools (F12) → Network tab → click any request to vinted.co.uk →
+   Request Headers → copy the entire value of the `Cookie` header.
+3. Paste it into a file, e.g. `~/.vinted_cookies` (one line). Treat this file
+   like a password — anyone holding it is logged in as you.
+
+```bash
+python -m vinted_flip --discover --auto 5 \
+    --cookies ~/.vinted_cookies --favourite promising
+```
+
+The run logs `Linked to Vinted account: <name>` when the session is
+recognised; if the cookie has expired it says so and continues anonymously.
+
+Safety rails, on purpose: favouriting is capped per run (15 for
+`promising`, 25 for `all`), every action is human-paced by the request
+delay, and the tool will never buy, bid, message, or list on your behalf —
+automating those is against Vinted's terms and risks the account the whole
+operation depends on. Sessions expire after a while; re-copy the cookie
+when the link stops being recognised.
+
 ## Vinted MCP server (chat-driven research)
 
 `.mcp.json` configures the [`vinted-mcp-server`](https://www.npmjs.com/package/vinted-mcp-server)

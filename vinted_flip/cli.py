@@ -73,6 +73,17 @@ def run(argv: list[str] | None = None) -> int:
                              "description damage scan, all photos, seller "
                              "history. Default -1 vets every candidate; give "
                              "a number to cap it for quick runs; 0 disables.")
+    parser.add_argument("--cookies", metavar="FILE", default=None,
+                        help="File holding the Cookie header copied from a "
+                             "logged-in vinted.co.uk browser session; links "
+                             "the run to that account.")
+    parser.add_argument("--favourite", choices=["off", "promising", "all"],
+                        default="off",
+                        help="With --cookies: heart candidates so they appear "
+                             "in the account's Favourites tab on the app. "
+                             "'promising' hearts only PROMISING verdicts "
+                             "(capped at 15/run); 'all' hearts every "
+                             "candidate (capped at 25/run).")
     parser.add_argument("--delay", type=float, default=2.0,
                         help="Seconds between requests (be polite; default 2).")
     parser.add_argument("--out", default="report",
@@ -86,6 +97,22 @@ def run(argv: list[str] | None = None) -> int:
     )
 
     client = VintedClient(domain=args.domain, delay_seconds=args.delay)
+
+    if args.cookies:
+        cookie_header = Path(args.cookies).read_text(encoding="utf-8").strip()
+        client.attach_cookies(cookie_header)
+        login = client.whoami()
+        if login:
+            log.info("Linked to Vinted account: %s", login)
+        else:
+            log.warning(
+                "Cookies loaded but Vinted doesn't recognise the session — "
+                "re-copy the Cookie header from a logged-in browser tab. "
+                "Continuing anonymously; --favourite will not work."
+            )
+    elif args.favourite != "off":
+        parser.error("--favourite needs --cookies (a logged-in session)")
+
     candidates: list[FlipCandidate] = []
 
     searches = args.searches
@@ -177,6 +204,10 @@ def run(argv: list[str] | None = None) -> int:
 
     candidates.sort(key=lambda c: c.flip_score, reverse=True)
 
+    if args.favourite != "off" and args.vet == 0:
+        log.warning("--favourite promising needs vetting on; enabling it.")
+        args.vet = -1
+
     if args.vet != 0 and candidates:
         from .vet import vet_listing
 
@@ -193,6 +224,23 @@ def run(argv: list[str] | None = None) -> int:
                 rank.get(c.vet.verdict if c.vet else None, 2),
                 -c.flip_score,
             )
+        )
+
+    if args.favourite != "off" and candidates:
+        cap = 15 if args.favourite == "promising" else 25
+        to_heart = [
+            c for c in candidates
+            if args.favourite == "all"
+            or (c.vet and c.vet.verdict == "PROMISING")
+        ][:cap]
+        hearted = 0
+        for cand in to_heart:
+            if client.favourite(cand.listing.id):
+                hearted += 1
+                log.info("  ♥ %s", cand.listing.title[:60])
+        log.info(
+            "Hearted %d/%d candidates — they're now in the account's "
+            "Favourites tab.", hearted, len(to_heart),
         )
     out_html = Path(f"{args.out}.html")
     out_csv = Path(f"{args.out}.csv")
