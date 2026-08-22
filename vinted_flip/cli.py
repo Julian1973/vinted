@@ -68,10 +68,11 @@ def run(argv: list[str] | None = None) -> int:
         help='Only keep these condition labels, e.g. --conditions '
              '"New with tags" "New without tags" "Very good".',
     )
-    parser.add_argument("--vet", type=int, default=10, metavar="N",
-                        help="Deep-vet the top N candidates by opening their "
-                             "ads: description damage scan, all photos, "
-                             "seller history (default 10; 0 disables).")
+    parser.add_argument("--vet", type=int, default=-1, metavar="N",
+                        help="Deep-vet candidates by opening their ads: "
+                             "description damage scan, all photos, seller "
+                             "history. Default -1 vets every candidate; give "
+                             "a number to cap it for quick runs; 0 disables.")
     parser.add_argument("--delay", type=float, default=2.0,
                         help="Seconds between requests (be polite; default 2).")
     parser.add_argument("--out", default="report",
@@ -176,10 +177,10 @@ def run(argv: list[str] | None = None) -> int:
 
     candidates.sort(key=lambda c: c.flip_score, reverse=True)
 
-    if args.vet > 0 and candidates:
+    if args.vet != 0 and candidates:
         from .vet import vet_listing
 
-        to_vet = candidates[: args.vet]
+        to_vet = candidates if args.vet < 0 else candidates[: args.vet]
         log.info("Deep-vetting top %d candidates (reading full ads)...", len(to_vet))
         for cand in to_vet:
             cand.vet = vet_listing(client, cand.listing.url)
