@@ -40,6 +40,17 @@ def run(argv: list[str] | None = None) -> int:
         "--searches", nargs="+", default=DEFAULT_SEARCHES,
         help="Search terms; each defines a comparable market group.",
     )
+    parser.add_argument(
+        "--discover", action="store_true",
+        help="First sweep the whole market universe and rank every market by "
+             "demand velocity (favourites/day), price level and liquidity; "
+             "writes <out>-markets.csv.",
+    )
+    parser.add_argument(
+        "--auto", type=int, default=0, metavar="N",
+        help="With --discover: automatically deep-scan the top N ranked "
+             "markets instead of --searches.",
+    )
     parser.add_argument("--domain", default="www.vinted.co.uk",
                         help="Vinted domain (default UK).")
     parser.add_argument("--pages", type=int, default=2,
@@ -76,7 +87,32 @@ def run(argv: list[str] | None = None) -> int:
     client = VintedClient(domain=args.domain, delay_seconds=args.delay)
     candidates: list[FlipCandidate] = []
 
-    for term in args.searches:
+    searches = args.searches
+    if args.discover:
+        import csv as _csv
+
+        from .discover import discover
+
+        log.info("Discovering markets (ranking by demand velocity)...")
+        markets = discover(client)
+        league_path = Path(f"{args.out}-markets.csv")
+        with league_path.open("w", newline="", encoding="utf-8") as fh:
+            w = _csv.writer(fh)
+            w.writerow(["rank", "market", "opportunity_score", "median_price",
+                        "median_favs_per_day", "hot_share", "listings_sampled"])
+            for i, s in enumerate(markets, 1):
+                w.writerow([i, s.term, s.opportunity, s.median_price,
+                            s.median_velocity, s.hot_share, s.count])
+        log.info("Market league table → %s", league_path)
+        if args.auto > 0:
+            searches = [s.term for s in markets[: args.auto]]
+            log.info("Auto-scanning top %d markets: %s", args.auto, ", ".join(searches))
+        else:
+            for i, s in enumerate(markets[:15], 1):
+                log.info("%2d. %-32s score %.0f", i, s.term, s.opportunity)
+            return 0
+
+    for term in searches:
         log.info("Sampling market for %r ...", term)
         listings = []
         for page in range(1, args.pages + 1):

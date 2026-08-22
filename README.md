@@ -8,7 +8,19 @@ shot on a plain background can close most of the gap to the market median.
 
 ## How it works
 
-For each search term you give it (e.g. `"carhartt jacket"`):
+**Finding the best markets first** (`--discover`): before hunting, the tool
+can sweep a universe of ~40 proven UK resale markets and rank them by real
+demand — each listing's upload timestamp lets it compute **favourites per
+day**, so "best-selling" becomes measurable. Markets are scored by demand
+velocity × price level × liquidity and written to a league table
+(`<out>-markets.csv`). Add `--auto 5` to deep-scan the top 5 automatically:
+
+```bash
+python -m vinted_flip --discover --auto 5 --conditions "Very good" \
+    "New with tags" "New without tags"
+```
+
+For each search term (given via `--searches` or chosen by `--auto`):
 
 1. **Samples the market** — pulls a couple of pages of current listings and
    computes the median asking price and average favourite count (the demand
