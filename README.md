@@ -99,6 +99,37 @@ automating those is against Vinted's terms and risks the account the whole
 operation depends on. Sessions expire after a while; re-copy the cookie
 when the link stops being recognised.
 
+## Reshoot previews with Runway (optional)
+
+Before you buy, see what the listing would look like after the reshoot.
+`--reshoot N` sends the top N non-AVOID candidates' photos to the
+[Runway API](https://docs.dev.runwayml.com/api/) (`POST /v1/text_to_image`
+with the listing photo as a reference image), polls the task, and puts the
+studio-style "after" shot under the original in `report.html`. Images are
+saved to `<out>-reshoots/` because Runway's output links expire in 24–48h.
+
+```bash
+export RUNWAYML_API_SECRET=key_...   # from https://dev.runway.com
+python -m vinted_flip --discover --auto 5 --reshoot 10
+```
+
+Cost: the default `gen4_image_turbo` is 2 credits ($0.02) per image, so
+`--reshoot 10` costs about $0.20. `--reshoot-model gen4_image` is higher
+quality at 5–8 credits.
+
+Once the item is in your hands, clean up your own photos the same way:
+
+```bash
+python -m vinted_flip.runway my_photo.jpg -o my_photo-studio.jpg
+```
+
+Use the AI shot as a **preview and styling guide**, not as a replacement for
+real photos. The prompt tells the model to keep the garment identical, marks
+and all, but image models can still change details. Vinted requires photos of
+the actual item, and a buyer who gets something different from the photo can
+open a "not as described" claim. List with your real reshoot, or with an AI
+cleanup you have checked against the item.
+
 ## Vinted MCP server (chat-driven research)
 
 `.mcp.json` configures the [`vinted-mcp-server`](https://www.npmjs.com/package/vinted-mcp-server)

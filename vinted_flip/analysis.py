@@ -143,6 +143,7 @@ class FlipCandidate:
     flip_score: float
     reasons: list[str] = field(default_factory=list)
     vet: object = None  # Optional[vet.VetReport], attached by the CLI
+    reshoot_path: Optional[str] = None  # Runway studio preview, relative to the report
 
 
 def buy_in_cost(price: float, shipping: float = DEFAULT_SHIPPING_IN,
