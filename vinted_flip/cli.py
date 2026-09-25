@@ -84,6 +84,15 @@ def run(argv: list[str] | None = None) -> int:
                              "'promising' hearts only PROMISING verdicts "
                              "(capped at 15/run); 'all' hearts every "
                              "candidate (capped at 25/run).")
+    parser.add_argument("--reshoot", type=int, default=0, metavar="N",
+                        help="Use the Runway API to generate a clean studio "
+                             "'after' shot for the top N non-AVOID candidates, "
+                             "shown beside the original in the report. Needs "
+                             "RUNWAYML_API_SECRET; costs 2 credits ($0.02) "
+                             "per image with the default model. Default 0 (off).")
+    parser.add_argument("--reshoot-model", default="gen4_image_turbo",
+                        choices=["gen4_image_turbo", "gen4_image"],
+                        help="Runway image model for --reshoot.")
     parser.add_argument("--delay", type=float, default=2.0,
                         help="Seconds between requests (be polite; default 2).")
     parser.add_argument("--out", default="report",
@@ -242,12 +251,47 @@ def run(argv: list[str] | None = None) -> int:
             "Hearted %d/%d candidates — they're now in the account's "
             "Favourites tab.", hearted, len(to_heart),
         )
+    if args.reshoot > 0 and candidates:
+        _reshoot(client, candidates, args)
+
     out_html = Path(f"{args.out}.html")
     out_csv = Path(f"{args.out}.csv")
     write_html(candidates, out_html)
     write_csv(candidates, out_csv)
     log.info("Done: %d candidates → %s / %s", len(candidates), out_html, out_csv)
     return 0
+
+
+def _reshoot(client: VintedClient, candidates: list[FlipCandidate],
+             args: argparse.Namespace) -> None:
+    from .runway import RunwayClient, RunwayError
+
+    try:
+        runway = RunwayClient()
+    except RunwayError as exc:
+        log.warning("Skipping --reshoot: %s", exc)
+        return
+    targets = [
+        c for c in candidates
+        if c.listing.photo_url and not (c.vet and c.vet.verdict == "AVOID")
+    ][: args.reshoot]
+    out_dir = Path(f"{args.out}-reshoots")
+    out_dir.mkdir(exist_ok=True)
+    log.info("Generating %d Runway reshoot previews → %s/", len(targets), out_dir)
+    for cand in targets:
+        data = client.fetch_photo(cand.listing.photo_url)
+        if not data:
+            continue
+        try:
+            studio = runway.reshoot(data, model=args.reshoot_model)
+        except RunwayError as exc:
+            log.warning("  reshoot failed for %s: %s", cand.listing.id, exc)
+            continue
+        path = out_dir / f"{cand.listing.id}.jpg"
+        path.write_bytes(studio)
+        # Relative to the report so the HTML works wherever the folder goes.
+        cand.reshoot_path = f"{out_dir.name}/{path.name}"
+        log.info("  ✦ %s", cand.listing.title[:60])
 
 
 if __name__ == "__main__":

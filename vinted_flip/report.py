@@ -18,7 +18,7 @@ def write_csv(candidates: list[FlipCandidate], path: Path) -> None:
                 "size", "condition", "price", "group_median",
                 "undervalue_ratio", "photo_score", "photo_problems",
                 "seller_feedback", "description_excerpt", "est_total_cost",
-                "est_resale", "est_profit", "watchers", "url",
+                "est_resale", "est_profit", "watchers", "url", "reshoot_preview",
             ]
         )
         for c in candidates:
@@ -43,7 +43,7 @@ def write_csv(candidates: list[FlipCandidate], path: Path) -> None:
                     vet.description_excerpt if vet else "",
                     f"{c.total_cost:.2f}", f"{c.estimated_resale:.2f}",
                     f"{c.estimated_profit:.2f}", c.listing.favourite_count,
-                    c.listing.url,
+                    c.listing.url, c.reshoot_path or "",
                 ]
             )
 
@@ -57,6 +57,13 @@ def write_html(candidates: list[FlipCandidate], path: Path) -> None:
                 f'<img src="{html.escape(c.listing.photo_url)}" alt="" '
                 'loading="lazy" style="width:90px;height:90px;'
                 'object-fit:cover;border-radius:8px">'
+            )
+        if c.reshoot_path:
+            photo_cell += (
+                f'<br><img src="{html.escape(c.reshoot_path)}" alt="Runway '
+                'reshoot preview" loading="lazy" style="width:90px;height:90px;'
+                'object-fit:cover;border-radius:8px;margin-top:4px">'
+                '<br><small>AI preview</small>'
             )
         photo_score = f"{c.photo.total:.0f}/100" if c.photo else "n/a"
         problems = ", ".join(c.photo.problems) if c.photo else ""
